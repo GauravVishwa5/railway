@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Ticket, Search, ArrowRight, History as HistoryIcon, X, Printer, Share2, MapPin, Train } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
+import TrainTracker from './TrainTracker';
 
 interface PNRData {
   pnrNumber: string;
@@ -31,6 +32,7 @@ const PNRForm = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<PNRData | null>(null);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [showTrainTracker, setShowTrainTracker] = useState(false);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -212,6 +214,16 @@ const PNRForm = () => {
     }
   };
 
+  const handleOpenTrainTracker = () => {
+    if (result) {
+      setShowTrainTracker(true);
+    }
+  };
+
+  const handleCloseTrainTracker = () => {
+    setShowTrainTracker(false);
+  };
+
   const formatDate = (dateString: string) => {
     // Format date for better display by taking only the date part
     try {
@@ -220,6 +232,37 @@ const PNRForm = () => {
     } catch (e) {
       return dateString;
     }
+  };
+
+  // Create a TrackTracker popup dialog
+  const TrainTrackerPopup = () => {
+    if (!showTrainTracker || !result) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
+          <div className="flex justify-between items-center bg-forest-700 text-white p-4">
+            <h3 className="font-bold text-lg flex items-center">
+              <Train className="mr-2" /> Train Live Tracker
+            </h3>
+            <button
+              onClick={handleCloseTrainTracker}
+              className="rounded-full hover:bg-forest-600 p-1.5"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="p-4 overflow-auto max-h-[80vh]">
+            <TrainTracker
+              pnrData={{
+                trainNumber: result.trainNumber,
+                dateOfJourney: result.dateOfJourney
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -372,7 +415,10 @@ const PNRForm = () => {
                   >
                     <Share2 className="w-4 h-4 mr-2" /> Share
                   </button>
-                  <button className="bg-forest-600 hover:bg-forest-700 text-white px-4 py-2 rounded flex items-center text-sm">
+                  <button 
+                    onClick={handleOpenTrainTracker}
+                    className="bg-forest-600 hover:bg-forest-700 text-white px-4 py-2 rounded flex items-center text-sm"
+                  >
                     <MapPin className="w-4 h-4 mr-2" /> Track Train
                   </button>
                 </div>
@@ -381,6 +427,9 @@ const PNRForm = () => {
           )}
         </div>
       </div>
+
+      {/* Train Tracker Popup */}
+      <TrainTrackerPopup />
 
       {/* Hidden PNR input for print view */}
       <input type="hidden" id="current-pnr" value={pnr} />
