@@ -82,85 +82,34 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
 
     setLoading(true);
     try {
-      // Special case for demo
-      if (trainNum === '15018' || trainNum === '11061') {
-        // Use the demo data from the second document for train 15018
-        if (trainNum === '15018') {
-          const demoData = {
-            trainNumber: "15018",
-            trainName: "GKP LTT EXP",
-            origin: "GKP",
-            destination: "LTT",
-            runningOn: "YYYYYYY",
-            schedule: JSON.parse(document.getElementById('demo-data')?.textContent || '[]')
-          };
-          setTrainDetails(demoData);
-          
-          // Simulate current position based on current time
-          simulateCurrentPosition(demoData.schedule);
-        } else {
-          // For train 11061 (the one in PNR example)
-          const demoData = {
-            trainNumber: "11061",
-            trainName: "LTT JAYNAGAR EXP",
-            origin: "LTT",
-            destination: "JYG",
-            runningOn: "YYYYYNY",
-            schedule: [
-              { stationCode: "LTT", stationName: "Lokmanyatilak T", arrivalTime: "--", departureTime: "11:30", distance: "0", dayCount: "1", haltTime: "--" },
-              { stationCode: "TNA", stationName: "Thane", arrivalTime: "11:55", departureTime: "11:57", distance: "20", dayCount: "1", haltTime: "02:00" },
-              { stationCode: "KYN", stationName: "Kalyan Jn", arrivalTime: "12:20", departureTime: "12:25", distance: "37", dayCount: "1", haltTime: "05:00" },
-              { stationCode: "IGP", stationName: "Igatpuri", arrivalTime: "14:07", departureTime: "14:10", distance: "124", dayCount: "1", haltTime: "03:00" },
-              { stationCode: "NK", stationName: "Nashik Road", arrivalTime: "15:15", departureTime: "15:20", distance: "171", dayCount: "1", haltTime: "05:00" },
-              { stationCode: "MMR", stationName: "Manmad Jn", arrivalTime: "16:40", departureTime: "16:45", distance: "244", dayCount: "1", haltTime: "05:00" },
-              { stationCode: "BSL", stationName: "Bhusaval Jn", arrivalTime: "19:15", departureTime: "19:25", distance: "428", dayCount: "1", haltTime: "10:00" },
-              { stationCode: "BAU", stationName: "Burhanpur", arrivalTime: "20:31", departureTime: "20:33", distance: "483", dayCount: "1", haltTime: "02:00" },
-              { stationCode: "KNW", stationName: "Khandwa", arrivalTime: "21:50", departureTime: "21:55", distance: "551", dayCount: "1", haltTime: "05:00" },
-              { stationCode: "ET", stationName: "Itarsi Jn", arrivalTime: "01:55", departureTime: "02:10", distance: "736", dayCount: "2", haltTime: "15:00" },
-              { stationCode: "JBP", stationName: "Jabalpur", arrivalTime: "05:25", departureTime: "05:35", distance: "990", dayCount: "2", haltTime: "10:00" },
-              { stationCode: "KTE", stationName: "Katni", arrivalTime: "07:15", departureTime: "07:20", distance: "1081", dayCount: "2", haltTime: "05:00" },
-              { stationCode: "STA", stationName: "Satna", arrivalTime: "08:55", departureTime: "09:00", distance: "1179", dayCount: "2", haltTime: "05:00" },
-              { stationCode: "MKP", stationName: "Manikpur", arrivalTime: "10:33", departureTime: "10:35", distance: "1256", dayCount: "2", haltTime: "02:00" },
-              { stationCode: "PRYJ", stationName: "Prayagraj Jn", arrivalTime: "12:25", departureTime: "12:35", distance: "1356", dayCount: "2", haltTime: "10:00" },
-              { stationCode: "BSB", stationName: "Varanasi Jn", arrivalTime: "15:05", departureTime: "15:20", distance: "1492", dayCount: "2", haltTime: "15:00" },
-              { stationCode: "JYG", stationName: "Jaynagar", arrivalTime: "22:30", departureTime: "--", distance: "1704", dayCount: "2", haltTime: "--" }
-            ]
-          };
-          setTrainDetails(demoData);
-          
-          // Simulate current position based on current time
-          simulateCurrentPosition(demoData.schedule);
-        }
-      } else {
-        // Real API call for production
-        const response = await fetch(
-          `https://indian-railway-irctc.p.rapidapi.com/api/trains-search/v1/train/${trainNum}?isH5=true&client=web`,
-          {
-            headers: {
-              'x-rapidapi-key': '9aa9a6917cmsh428479b7a93cb56p190dfcjsn147d195bbaf6',
-              'x-rapidapi-host': 'indian-railway-irctc.p.rapidapi.com'
-            }
+      const response = await fetch(
+        `https://indian-railway-irctc.p.rapidapi.com/api/trains-search/v1/train/${trainNum}?isH5=true&client=web`,
+        {
+          headers: {
+            'x-rapidapi-key': '9aa9a6917cmsh428479b7a93cb56p190dfcjsn147d195bbaf6',
+            'x-rapidapi-host': 'indian-railway-irctc.p.rapidapi.com'
           }
-        );
-
-        const data = await response.json();
-        
-        if (!data || !data.body || data.body.length === 0 || !data.body[0].trains || data.body[0].trains.length === 0) {
-          showToast('No data found for this train number', 'error');
-          setTrainDetails(null);
-        } else {
-          const train = data.body[0].trains[0];
-          setTrainDetails({
-            trainNumber: train.trainNumber,
-            trainName: train.trainName,
-            origin: train.stationFrom,
-            destination: train.stationTo,
-            runningOn: train.runningOn,
-            schedule: train.schedule
-          });
-          
-          simulateCurrentPosition(train.schedule);
         }
+      );
+
+      const data = await response.json();
+      
+      if (!data || !data.body || data.body.length === 0 || !data.body[0].trains || data.body[0].trains.length === 0) {
+        showToast('No data found for this train number', 'error');
+        setTrainDetails(null);
+      } else {
+        const train = data.body[0].trains[0];
+        const trainData = {
+          trainNumber: train.trainNumber,
+          trainName: train.trainName,
+          origin: train.stationFrom,
+          destination: train.stationTo,
+          runningOn: train.runningOn,
+          schedule: train.schedule
+        };
+        
+        setTrainDetails(trainData);
+        simulateCurrentPosition(trainData.schedule);
       }
     } catch (error) {
       showToast('Failed to fetch train details. Please try again.', 'error');
@@ -355,11 +304,6 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
 
   return (
     <div className={`w-full ${standalone ? 'max-w-xl' : ''} bg-white rounded-lg shadow-md overflow-hidden`}>
-      {/* Hidden data element for the demo train schedule */}
-      <div id="demo-data" style={{ display: 'none' }}>
-        {JSON.stringify(JSON.parse(document.getElementById('demo-data')?.textContent || '[]'))}
-      </div>
-      
       <div className="bg-forest-700 p-4 text-white">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
@@ -551,7 +495,6 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
               <div>
                 <AlertTriangle className="w-12 h-12 text-forest-300 mx-auto mb-3" />
                 <p className="text-gray-500">Enter a train number and date to track train location</p>
-                <p className="text-xs text-gray-400 mt-1">Try 15018 for a demo</p>
               </div>
             ) : (
               <div>
