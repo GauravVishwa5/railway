@@ -26,16 +26,19 @@ const Footer = () => {
   ];
 
   return (
-    <footer className="bg-gradient-to-r from-emerald-900 to-forest-900 text-forest-50 py-6 text-center no-print">
+    <footer className="bg-gradient-to-r from-forest-900 to-forest-800 text-forest-50 py-6 text-center no-print">
       <div className="container mx-auto px-4">
         {/* Top Section with Logo and Links */}
         <div className="flex flex-col sm:flex-row items-center justify-between mb-6">
           <div className="flex items-center mb-4 sm:mb-0 group">
-            <div className="bg-forest-800 p-2 rounded-full mr-3 group-hover:bg-amber-600 transition-all duration-300">
-              <Train className="w-5 h-5 text-amber-400 group-hover:text-white" />
+            <div className="bg-gradient-to-br from-forest-700 to-forest-900 p-2 rounded-full mr-3 group-hover:from-amber-500 group-hover:to-amber-700 transition-all duration-300">
+              <Train className="text-amber-300 w-5 h-5 group-hover:text-white" />
             </div>
             <a href="#" className="flex items-center">
-              <span className="font-bold text-lg bg-gradient-to-r from-amber-200 to-amber-400 bg-clip-text text-transparent group-hover:from-amber-300 group-hover:to-amber-500 transition-all duration-300">Royal Express</span>
+              <h2 className="font-bold text-lg tracking-wider">
+                <span className="bg-gradient-to-r from-amber-300 to-amber-500 bg-clip-text text-transparent">Royal</span> 
+                <span className="text-forest-50"> Express</span>
+              </h2>
             </a>
           </div>
           
