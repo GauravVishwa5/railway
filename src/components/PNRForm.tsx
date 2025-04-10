@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Ticket, Search, ArrowRight, History as HistoryIcon, X, Printer, Share2, MapPin, Train, ChevronLeft, ChevronRight, AlertCircle, Clock, Calendar } from 'lucide-react';
+import { Ticket, Search, ArrowRight, History as HistoryIcon, X, Printer, Share2, MapPin, Train } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
-import TrainTracker from './TrainTracker';
+import TrainTrackerPopup from './TrainTrackerPopup';
 
 interface PNRData {
   pnrNumber: string;
@@ -234,39 +234,6 @@ const PNRForm = () => {
     }
   };
 
-  // TrainTracker Popup that uses the actual TrainTracker component
-  const TrainTrackerPopup = () => {
-    if (!showTrainTracker || !result) return null;
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden animate-slide-up">
-          {/* Header */}
-          <div className="bg-forest-700 text-white p-4 relative">
-            <button
-              onClick={handleCloseTrainTracker}
-              className="absolute right-4 top-4 rounded-full hover:bg-forest-600 p-1.5 transition duration-300"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <h3 className="font-bold text-xl">Train Live Tracker</h3>
-            <p className="text-forest-100 text-sm">Track the location and schedule of your train</p>
-          </div>
-          
-          {/* TrainTracker Component */}
-          <div className="overflow-auto max-h-[calc(90vh-120px)]">
-            <TrainTracker 
-              pnrData={{
-                trainNumber: result.trainNumber,
-                dateOfJourney: result.dateOfJourney
-              }}
-            />
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <>
       <div className="w-full max-w-xl bg-white bg-opacity-95 rounded-2xl shadow-2xl overflow-hidden animate-pop">
@@ -430,8 +397,15 @@ const PNRForm = () => {
         </div>
       </div>
 
-      {/* Train Tracker Popup using the actual TrainTracker component */}
-      <TrainTrackerPopup />
+      {/* Using the new TrainTrackerPopup component */}
+      <TrainTrackerPopup 
+        showTrainTracker={showTrainTracker}
+        handleCloseTrainTracker={handleCloseTrainTracker}
+        trainData={result ? {
+          trainNumber: result.trainNumber,
+          dateOfJourney: result.dateOfJourney
+        } : null}
+      />
 
       {/* Hidden PNR input for print view */}
       <input type="hidden" id="current-pnr" value={pnr} />
