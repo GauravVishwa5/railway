@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Train, Home, Info, Headphones, Menu, X, Search, Calendar } from 'lucide-react';
+import { Train, Home, Info, Headphones, Menu, X, Calendar } from 'lucide-react';
 
 const Header = () => {
   const [scrolled, setScrolled] = useState(false);
@@ -44,18 +44,6 @@ const Header = () => {
             </h1>
           </div>
 
-          {/* Search Bar - Only visible when scrolled on desktop */}
-          <div className={`hidden md:flex items-center max-w-xs w-full mx-4 transition-all duration-300 ${scrolled ? 'opacity-100' : 'opacity-0'}`}>
-            <div className="relative w-full">
-              <input 
-                type="text" 
-                placeholder="Search PNR or Train..." 
-                className="bg-forest-800 text-forest-100 pl-10 pr-4 py-2 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder-forest-400 text-sm"
-              />
-              <Search className="absolute left-3 top-2.5 w-4 h-4 text-forest-400" />
-            </div>
-          </div>
-
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-1">
             {navItems.map(item => (
@@ -91,18 +79,6 @@ const Header = () => {
               <Menu className="w-6 h-6" />
             )}
           </button>
-        </div>
-
-        {/* Mobile Search - Always visible on mobile */}
-        <div className="md:hidden mt-2 mb-1">
-          <div className="relative w-full">
-            <input 
-              type="text" 
-              placeholder="Search PNR or Train..." 
-              className="bg-forest-800 text-forest-100 pl-10 pr-4 py-2 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder-forest-400 text-sm"
-            />
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-forest-400" />
-          </div>
         </div>
       </div>
 
