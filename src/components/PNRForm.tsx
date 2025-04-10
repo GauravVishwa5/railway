@@ -234,159 +234,33 @@ const PNRForm = () => {
     }
   };
 
-  // Create an enhanced TrackTracker popup dialog
+  // TrainTracker Popup that uses the actual TrainTracker component
   const TrainTrackerPopup = () => {
     if (!showTrainTracker || !result) return null;
-
-    // Demo station data for visualization
-    const demoStations = [
-      { name: result.sourceStation, status: 'Departed', time: '11:30 AM', delay: '0 min' },
-      { name: 'KYN', status: 'Departed', time: '12:15 PM', delay: '5 min' },
-      { name: 'NK', status: 'Arrived', time: '01:20 PM', delay: '10 min' },
-      { name: 'BSL', status: 'Expected', time: '03:45 PM', delay: '15 min' },
-      { name: 'ET', status: 'Upcoming', time: '07:30 PM', delay: '0 min' },
-      { name: 'BPL', status: 'Upcoming', time: '10:25 PM', delay: '0 min' },
-      { name: result.destinationStation, status: 'Destination', time: '12:25 PM (Next Day)', delay: '0 min' },
-    ];
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden animate-slide-up">
-          {/* Header with train info */}
-          <div className="bg-gradient-to-r from-forest-700 to-forest-800 text-white p-5 relative">
+          {/* Header */}
+          <div className="bg-forest-700 text-white p-4 relative">
             <button
               onClick={handleCloseTrainTracker}
               className="absolute right-4 top-4 rounded-full hover:bg-forest-600 p-1.5 transition duration-300"
             >
               <X className="w-5 h-5" />
             </button>
-            
-            <div className="flex items-start gap-4">
-              <div className="bg-white rounded-lg p-2 flex items-center justify-center shadow-md">
-                <Train className="w-8 h-8 text-forest-700" />
-              </div>
-              
-              <div className="flex-1">
-                <h3 className="font-bold text-xl">{result.trainNumber} - {result.trainName}</h3>
-                
-                <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-forest-100">
-                  <div className="flex items-center gap-1">
-                    <Calendar className="w-4 h-4" />
-                    <span>{formatDate(result.dateOfJourney)}</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-4 h-4" />
-                    <span>Journey Time: ~13h 55m</span>
-                  </div>
-                  
-                  <div className="mt-1 sm:mt-0">
-                    <span className="bg-forest-900 py-1 px-3 rounded-full text-xs font-medium">
-                      {result.journeyClass}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="flex items-center mt-3 justify-between">
-                  <div className="text-center">
-                    <p className="text-xs text-forest-100">From</p>
-                    <p className="font-bold">{result.sourceStation}</p>
-                  </div>
-                  
-                  <div className="flex-1 mx-4 flex items-center">
-                    <div className="h-0.5 flex-1 bg-forest-500"></div>
-                    <div className="px-1">→</div>
-                    <div className="h-0.5 flex-1 bg-forest-500"></div>
-                  </div>
-                  
-                  <div className="text-center">
-                    <p className="text-xs text-forest-100">To</p>
-                    <p className="font-bold">{result.destinationStation}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <h3 className="font-bold text-xl">Train Live Tracker</h3>
+            <p className="text-forest-100 text-sm">Track the location and schedule of your train</p>
           </div>
           
-          {/* Live tracking content */}
-          <div className="p-5 overflow-auto max-h-[60vh]">
-            {/* Current train status card */}
-            <div className="bg-forest-50 border border-forest-100 rounded-xl p-4 mb-5">
-              <h4 className="text-forest-800 font-medium mb-2 flex items-center">
-                <AlertCircle className="w-4 h-4 mr-2" /> Current Status
-              </h4>
-              
-              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Current Station</p>
-                  <p className="font-bold text-lg">NK (Nasik Road)</p>
-                </div>
-                
-                <div className="px-3 py-1.5 bg-yellow-50 text-yellow-700 rounded-lg flex items-center">
-                  <Clock className="w-4 h-4 mr-2" /> Running 10 minutes late
-                </div>
-              </div>
-              
-              <div className="mt-3 flex flex-wrap gap-3">
-                <div className="bg-white rounded-lg px-3 py-2 border border-gray-100">
-                  <p className="text-xs text-gray-500">Next Station</p>
-                  <p className="font-medium">BSL (Bhusaval Junction)</p>
-                  <p className="text-xs text-gray-500">Expected: 03:45 PM</p>
-                </div>
-                
-                <div className="bg-white rounded-lg px-3 py-2 border border-gray-100">
-                  <p className="text-xs text-gray-500">Distance Covered</p>
-                  <p className="font-medium">254 KM / 921 KM</p>
-                  <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
-                    <div className="bg-forest-600 h-1.5 rounded-full" style={{ width: '28%' }}></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            {/* Train journey progress timeline */}
-            <div className="relative pb-2">
-              <h4 className="text-forest-800 font-medium mb-3">Journey Progress</h4>
-              
-              <div className="absolute left-4 top-10 bottom-0 w-0.5 bg-gray-200 z-0"></div>
-              
-              {demoStations.map((station, index) => (
-                <div key={index} className="relative flex mb-6 z-10">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-4 shrink-0 ${
-                    station.status === 'Departed' ? 'bg-green-100 text-green-600' :
-                    station.status === 'Arrived' ? 'bg-blue-100 text-blue-600' :
-                    station.status === 'Expected' ? 'bg-yellow-100 text-yellow-600' :
-                    'bg-gray-100 text-gray-500'
-                  }`}>
-                    {station.status === 'Departed' ? <ChevronLeft className="w-5 h-5" /> :
-                     station.status === 'Arrived' ? <Train className="w-4 h-4" /> :
-                     station.status === 'Expected' ? <Clock className="w-4 h-4" /> :
-                     <ChevronRight className="w-5 h-5" />}
-                  </div>
-                  
-                  <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-100 p-3">
-                    <div className="flex flex-wrap justify-between items-start">
-                      <div>
-                        <h5 className="font-bold">{station.name}</h5>
-                        <p className="text-sm text-gray-500">{station.status}</p>
-                      </div>
-                      
-                      <div className="text-right">
-                        <p className="font-medium">{station.time}</p>
-                        {station.delay !== '0 min' && (
-                          <p className="text-xs text-yellow-600">Delay: {station.delay}</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          {/* Footer with info */}
-          <div className="p-4 bg-gray-50 border-t border-gray-100 text-center text-sm text-gray-500">
-            Data is updated in real-time. Last updated at {new Date().toLocaleTimeString()}
+          {/* TrainTracker Component */}
+          <div className="overflow-auto max-h-[calc(90vh-120px)]">
+            <TrainTracker 
+              pnrData={{
+                trainNumber: result.trainNumber,
+                dateOfJourney: result.dateOfJourney
+              }}
+            />
           </div>
         </div>
       </div>
@@ -556,7 +430,7 @@ const PNRForm = () => {
         </div>
       </div>
 
-      {/* Enhanced Train Tracker Popup */}
+      {/* Train Tracker Popup using the actual TrainTracker component */}
       <TrainTrackerPopup />
 
       {/* Hidden PNR input for print view */}
