@@ -28,7 +28,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const showToast = (message: string, type: ToastType) => {
     const id = Date.now();
-    setToasts(prev => [...prev, { message, type, id }]);
+    setToasts([{ message, type, id }]); // Limit to 1 toast
     setTimeout(() => {
       setToasts(prev => prev.filter(toast => toast.id !== id));
     }, 5000);
@@ -50,7 +50,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             {toast.message}
             <button
               className="ml-4 text-gray-500 hover:text-gray-700"
-              onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+              onClick={() => setToasts([])} // Clear the single toast
             >
               ×
             </button>
