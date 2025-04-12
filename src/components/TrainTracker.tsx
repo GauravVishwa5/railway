@@ -19,6 +19,7 @@ interface TrainDetails {
   destination: string;
   schedule: TrainStationDetails[];
   runningOn: string;
+  timestamp: number; // When this was cached
 }
 
 interface TrainTrackerProps {
@@ -28,6 +29,9 @@ interface TrainTrackerProps {
   };
   standalone?: boolean;
 }
+
+// Cache expiration time (7 days in milliseconds)
+const CACHE_EXPIRATION = 7 * 24 * 60 * 60 * 1000;
 
 const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
   const [trainNumber, setTrainNumber] = useState(pnrData?.trainNumber || '');
@@ -73,6 +77,67 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
       return new Date().toISOString().split('T')[0];
     }
   }
+
+  // Function to get cached train details from localStorage
+  const getCachedTrainDetails = (trainNum: string): TrainDetails | null => {
+    try {
+      const cachedData = localStorage.getItem(`train_${trainNum}`);
+      if (!cachedData) return null;
+      
+      const parsedData: TrainDetails = JSON.parse(cachedData);
+      
+      // Check if the cache has expired (7 days)
+      if (Date.now() - parsedData.timestamp > CACHE_EXPIRATION) {
+        localStorage.removeItem(`train_${trainNum}`);
+        return null;
+      }
+      
+      return parsedData;
+    } catch (error) {
+      console.error('Error retrieving cached train details:', error);
+      return null;
+    }
+  };
+
+  // Function to save train details to localStorage
+  const saveTrainDetailsToCache = (details: TrainDetails) => {
+    try {
+      // Add timestamp to track when it was cached
+      const detailsWithTimestamp = {
+        ...details,
+        timestamp: Date.now()
+      };
+      
+      localStorage.setItem(`train_${details.trainNumber}`, JSON.stringify(detailsWithTimestamp));
+    } catch (error) {
+      console.error('Error saving train details to cache:', error);
+      // If localStorage is full, clear some older items
+      try {
+        clearOldCachedTrains();
+      } catch (e) {
+        console.error('Failed to clear cache:', e);
+      }
+    }
+  };
+
+  // Function to clear older cached trains if localStorage is full
+  const clearOldCachedTrains = () => {
+    const keysToDelete = [];
+    
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('train_')) {
+        keysToDelete.push({
+          key,
+          timestamp: JSON.parse(localStorage.getItem(key) || '{"timestamp": 0}').timestamp
+        });
+      }
+    }
+    
+    // Sort by timestamp (oldest first) and remove the oldest 5 items
+    keysToDelete.sort((a, b) => a.timestamp - b.timestamp);
+    keysToDelete.slice(0, 5).forEach(item => localStorage.removeItem(item.key));
+  };
 
   const parseTrainStations = (statusText: string): TrainStationDetails[] => {
     try {
@@ -151,8 +216,19 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
     }
 
     setLoading(true);
+    
+    // First, check if we have cached data
+    const cachedDetails = getCachedTrainDetails(trainNum);
+    if (cachedDetails) {
+      setTrainDetails(cachedDetails);
+      simulateCurrentPosition(cachedDetails.schedule);
+      setLoading(false);
+      showToast('Loaded cached train details', 'success');
+      return;
+    }
+    
     try {
-      // Using the custom API endpoint provided
+      // Using the custom API endpoint
       const response = await fetch(
         `https://train-tracker-api.onrender.com/api/train/${trainNum}`
       );
@@ -176,11 +252,16 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
           origin: schedule.length > 0 ? schedule[0].stationName : 'Unknown',
           destination: schedule.length > 0 ? schedule[schedule.length - 1].stationName : 'Unknown',
           runningOn: 'YNYNYNN', // Sample running days (Sun-Sat)
-          schedule
+          schedule,
+          timestamp: Date.now()
         };
+        
+        // Save to localStorage for future use
+        saveTrainDetailsToCache(trainData);
         
         setTrainDetails(trainData);
         simulateCurrentPosition(trainData.schedule);
+        showToast('Train details loaded successfully', 'success');
       }
     } catch (error) {
       showToast('Failed to fetch train details. Please try again.', 'error');
@@ -373,6 +454,39 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
     });
   };
 
+  // Clear all cached trains from localStorage
+  const clearAllCachedTrains = () => {
+    try {
+      const keysToDelete = [];
+      
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('train_')) {
+          keysToDelete.push(key);
+        }
+      }
+      
+      keysToDelete.forEach(key => localStorage.removeItem(key));
+      showToast('Cache cleared successfully', 'success');
+    } catch (error) {
+      console.error('Error clearing cache:', error);
+      showToast('Failed to clear cache', 'error');
+    }
+  };
+
+  // Clear cache for current train
+  const clearCurrentTrainCache = () => {
+    if (trainNumber) {
+      try {
+        localStorage.removeItem(`train_${trainNumber}`);
+        showToast(`Cache cleared for train ${trainNumber}`, 'success');
+      } catch (error) {
+        console.error('Error clearing current train cache:', error);
+        showToast('Failed to clear cache', 'error');
+      }
+    }
+  };
+
   return (
     <div className={`w-full ${standalone ? 'max-w-xl' : ''} bg-white rounded-lg shadow-md overflow-hidden`}>
       <div className="bg-forest-700 p-4 text-white">
@@ -381,11 +495,26 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
             <Train className="w-5 h-5 mr-2" />
             <h2 className="text-lg font-bold">Train Live Tracker</h2>
           </div>
-          {pnrData?.trainNumber && (
-            <span className="bg-forest-600 px-2 py-1 rounded text-xs">
-              PNR Connected
-            </span>
-          )}
+          <div className="flex space-x-2">
+            {pnrData?.trainNumber && (
+              <span className="bg-forest-600 px-2 py-1 rounded text-xs">
+                PNR Connected
+              </span>
+            )}
+            {trainDetails && (
+              <div className="relative group">
+                <button 
+                  className="text-xs px-2 py-1 bg-forest-800 rounded hover:bg-forest-900"
+                  onClick={clearCurrentTrainCache}
+                >
+                  Clear Cache
+                </button>
+                <div className="absolute hidden group-hover:block right-0 w-40 p-2 mt-1 text-xs bg-forest-900 rounded shadow-lg">
+                  Clear cached data for this train
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -444,13 +573,20 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
                   </p>
                   {formatRunningDays(trainDetails.runningOn)}
                 </div>
-                <div className="flex items-center">
-                  <Calendar className="w-4 h-4 mr-1 text-gray-600" />
-                  <span className="text-sm text-gray-600">{new Date(journeyDate).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                  })}</span>
+                <div className="flex flex-col items-end">
+                  <div className="flex items-center">
+                    <Calendar className="w-4 h-4 mr-1 text-gray-600" />
+                    <span className="text-sm text-gray-600">{new Date(journeyDate).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric'
+                    })}</span>
+                  </div>
+                  {trainDetails.timestamp && (
+                    <span className="text-xs text-gray-400 mt-1">
+                      Cached: {new Date(trainDetails.timestamp).toLocaleDateString()}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
