@@ -20,7 +20,21 @@ interface Station {
   departureTime?: string;
   distance?: number;
   status?: 'departed' | 'current' | 'upcoming';
+  dayCount?: string;
 }
+
+interface StationApiResponse {
+  success: boolean;
+  data: {
+    'Station Name': string;
+    'Station Code': string;
+    Latitude: number;
+    Longitude: number;
+  };
+}
+
+// Cache for stations data to avoid repeated API calls
+const stationsCache: Record<string, Station> = {};
 
 const TrainTrackerPopup: React.FC<TrainTrackerPopupProps> = ({
   showTrainTracker,
@@ -28,6 +42,33 @@ const TrainTrackerPopup: React.FC<TrainTrackerPopupProps> = ({
   trainData
 }) => {
   const [showMap, setShowMap] = useState(false);
+
+  // Preload Leaflet when component mounts, not just when map view is selected
+  useEffect(() => {
+    if (!window.L) {
+      loadLeaflet();
+    }
+  }, []);
+
+  // Load Leaflet library
+  const loadLeaflet = () => {
+    // Check if already loaded
+    if (document.querySelector('link[href*="leaflet.min.css"]') || 
+        document.querySelector('script[src*="leaflet.min.js"]')) {
+      return;
+    }
+    
+    // Load Leaflet CSS
+    const linkEl = document.createElement('link');
+    linkEl.rel = 'stylesheet';
+    linkEl.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+    document.head.appendChild(linkEl);
+
+    // Load Leaflet JS
+    const scriptEl = document.createElement('script');
+    scriptEl.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+    document.body.appendChild(scriptEl);
+  };
 
   if (!showTrainTracker || !trainData) return null;
   
@@ -67,7 +108,7 @@ const TrainTrackerPopup: React.FC<TrainTrackerPopupProps> = ({
         {/* Content - TrainTracker or Map View */}
         <div className="overflow-auto max-h-[calc(90vh-120px)]">
           {showMap ? (
-            <SimulatedExcelRailwayMap 
+            <EnhancedRailwayMap 
               trainNumber={trainData.trainNumber}
               dateOfJourney={trainData.dateOfJourney}
             />
@@ -85,207 +126,269 @@ const TrainTrackerPopup: React.FC<TrainTrackerPopupProps> = ({
   );
 };
 
-// Simulated Excel-based Indian Railway Map
-const SimulatedExcelRailwayMap: React.FC<{trainNumber: string, dateOfJourney: string}> = ({ trainNumber, dateOfJourney }) => {
-  const [isMapLoaded, setIsMapLoaded] = useState(false);
+// Enhanced Railway Map with API Integration
+const EnhancedRailwayMap: React.FC<{trainNumber: string, dateOfJourney: string}> = ({ trainNumber, dateOfJourney }) => {
+  const [isMapLoaded, setIsMapLoaded] = useState(!!window.L); // Check if already loaded
   const [trainRoute, setTrainRoute] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const mapRef = useRef<any>(null);
+  const [fallbackUsed, setFallbackUsed] = useState(false);
 
-  // This is our simulated Excel data - what would be loaded from the Excel file
-  // This represents the content of "./asset/Indian_Railway_Stations.xlsx"
-  const stationDatabase: Station[] = [
-    // Mumbai to Delhi route stations (Rajdhani Express)
-    { name: "Mumbai Central", code: "MMCT", lat: 18.971, lng: 72.819 },
-    { name: "Borivali", code: "BVI", lat: 19.231, lng: 72.854 },
-    { name: "Surat", code: "ST", lat: 21.206, lng: 72.837 },
-    { name: "Vadodara Junction", code: "BRC", lat: 22.307, lng: 73.181 },
-    { name: "Ratlam Junction", code: "RTM", lat: 23.331, lng: 75.037 },
-    { name: "Kota Junction", code: "KOTA", lat: 25.179, lng: 75.844 },
-    { name: "New Delhi", code: "NDLS", lat: 28.644, lng: 77.216 },
-    
-    // Howrah to Delhi route stations (Howrah Rajdhani)
-    { name: "Howrah Junction", code: "HWH", lat: 22.584, lng: 88.342 },
-    { name: "Dhanbad Junction", code: "DHN", lat: 23.795, lng: 86.430 },
-    { name: "Gaya Junction", code: "GAYA", lat: 24.795, lng: 84.999 },
-    { name: "Patna Junction", code: "PNBE", lat: 25.594, lng: 85.140 },
-    { name: "Mughalsarai Junction", code: "MGS", lat: 25.283, lng: 83.119 },
-    { name: "Allahabad Junction", code: "ALD", lat: 25.444, lng: 81.825 },
-    { name: "Kanpur Central", code: "CNB", lat: 26.455, lng: 80.349 },
-    
-    // Sealdah to Delhi route stations (Sealdah Duronto)
-    { name: "Sealdah", code: "SDAH", lat: 22.571, lng: 88.378 },
-    
-    // Chennai to Delhi route stations
-    { name: "Chennai Central", code: "MAS", lat: 13.083, lng: 80.276 },
-    { name: "Vijayawada Junction", code: "BZA", lat: 16.517, lng: 80.627 },
-    { name: "Nagpur Junction", code: "NGP", lat: 21.151, lng: 79.082 },
-    { name: "Bhopal Junction", code: "BPL", lat: 23.268, lng: 77.412 },
-    { name: "Jhansi Junction", code: "JHS", lat: 25.448, lng: 78.580 },
-    { name: "Agra Cantt", code: "AGC", lat: 27.139, lng: 78.006 },
-    
-    // Bangalore to Mumbai route stations
-    { name: "Bangalore City", code: "SBC", lat: 12.978, lng: 77.571 },
-    { name: "Hubli Junction", code: "UBL", lat: 15.347, lng: 75.138 },
-    { name: "Pune Junction", code: "PUNE", lat: 18.529, lng: 73.874 },
-    { name: "Kalyan Junction", code: "KYN", lat: 19.243, lng: 73.129 },
-    
-    // Kolkata to Chennai route stations
-    { name: "Kharagpur Junction", code: "KGP", lat: 22.339, lng: 87.323 },
-    { name: "Bhubaneswar", code: "BBS", lat: 20.244, lng: 85.840 },
-    { name: "Visakhapatnam", code: "VSKP", lat: 17.728, lng: 83.218 },
-    
-    // Additional major stations
-    { name: "Ahmedabad Junction", code: "ADI", lat: 23.022, lng: 72.571 },
-    { name: "Jaipur Junction", code: "JP", lat: 26.919, lng: 75.788 },
-    { name: "Lucknow NR", code: "LKO", lat: 26.831, lng: 80.912 },
-    { name: "Secunderabad Junction", code: "SC", lat: 17.501, lng: 78.501 },
-    { name: "Hyderabad Deccan", code: "HYB", lat: 17.387, lng: 78.484 },
-    { name: "Ernakulam Junction", code: "ERS", lat: 9.969, lng: 76.291 },
-    { name: "Thiruvananthapuram Central", code: "TVC", lat: 8.489, lng: 76.952 }
-  ];
-
-  // Load Leaflet library
+  // Load Leaflet library if not loaded in parent component
   useEffect(() => {
-    // Load Leaflet CSS
-    const linkEl = document.createElement('link');
-    linkEl.rel = 'stylesheet';
-    linkEl.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
-    document.head.appendChild(linkEl);
-
-    // Load Leaflet JS
-    const scriptEl = document.createElement('script');
-    scriptEl.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
-    scriptEl.onload = () => setIsMapLoaded(true);
-    document.body.appendChild(scriptEl);
-
-    return () => {
-      document.head.removeChild(linkEl);
-      document.body.removeChild(scriptEl);
-    };
+    if (window.L) {
+      setIsMapLoaded(true);
+      return;
+    }
+    
+    const checkLeafletLoaded = setInterval(() => {
+      if (window.L) {
+        setIsMapLoaded(true);
+        clearInterval(checkLeafletLoaded);
+      }
+    }, 100);
+    
+    return () => clearInterval(checkLeafletLoaded);
   }, []);
 
   // Generate train route when component mounts or train number changes
   useEffect(() => {
     if (isMapLoaded) {
-      generateTrainRoute(trainNumber);
+      fetchAndGenerateTrainRoute(trainNumber);
     }
   }, [isMapLoaded, trainNumber]);
 
-  // Generate a route for the specified train using the station database
-  const generateTrainRoute = (trainNum: string) => {
+  // Fetch station data from API and generate route - with improved parallel fetching
+  const fetchAndGenerateTrainRoute = async (trainNum: string) => {
     setIsLoading(true);
-    
-    // Define routes for key trains
-    const trainRoutes: Record<string, string[]> = {
-      "12951": ["MMCT", "BVI", "ST", "BRC", "RTM", "KOTA", "NDLS"], // Mumbai Rajdhani
-      "12301": ["HWH", "DHN", "GAYA", "PNBE", "MGS", "ALD", "CNB", "NDLS"], // Howrah Rajdhani
-      "12259": ["SDAH", "DHN", "GAYA", "MGS", "ALD", "CNB", "NDLS"], // Sealdah Duronto
-      "12621": ["MAS", "BZA", "NGP", "BPL", "JHS", "AGC", "NDLS"], // Tamil Nadu Express
-      "12627": ["SBC", "UBL", "PUNE", "KYN", "MMCT"], // Karnataka Express
-      "12841": ["HWH", "KGP", "BBS", "VSKP", "BZA", "MAS"], // Coromandel Express
-      // Add more train routes as needed
-    };
-    
-    // Use default route if specific train not found
-    const routeCodes = trainRoutes[trainNum] || trainRoutes["12951"];
-    const trainName = getTrainName(trainNum);
+    setErrorMessage(null);
     
     try {
-      // Find stations that match the route codes
-      const routeStations: Station[] = [];
-      let totalDistance = 0;
+      // Check localStorage for cached train data
+      const storageKey = `train_${trainNum}_data`;
+      const cachedData = localStorage.getItem(storageKey);
       
-      for (let i = 0; i < routeCodes.length; i++) {
-        const stationCode = routeCodes[i];
-        const station = stationDatabase.find(s => s.code === stationCode);
-        
-        if (station) {
-          // Calculate times and distances (simulated)
-          const hour = 16 + Math.floor(i * 2.5); // Start at 16:00, add ~2.5 hours per station
-          const minute = Math.floor(Math.random() * 55);
-          
-          const arrivalTime = i === 0 ? `${hour}:${minute.toString().padStart(2, '0')}` : 
-            `${(hour % 24).toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-          
-          const departureMinute = (minute + 2) % 60;
-          const departureHour = minute + 2 >= 60 ? (hour + 1) % 24 : hour % 24;
-          const departureTime = i === routeCodes.length - 1 ? "-" : 
-            `${departureHour.toString().padStart(2, '0')}:${departureMinute.toString().padStart(2, '0')}`;
-          
-          // Calculate distance (simulated)
-          if (i > 0) {
-            const prevStation = routeStations[i - 1];
-            totalDistance += calculateDistance(
-              prevStation.lat, prevStation.lng,
-              station.lat, station.lng
-            );
+      if (cachedData) {
+        try {
+          const parsedData = JSON.parse(cachedData);
+          // Use cached data only if it's less than 1 hour old
+          if (parsedData.timestamp && (Date.now() - parsedData.timestamp < 3600000)) {
+            setTrainRoute(parsedData.routeData);
+            setIsLoading(false);
+            return;
           }
-          
-          // Determine status based on position in route
-          let status: 'departed' | 'current' | 'upcoming';
-          if (i < Math.floor(routeCodes.length / 2) - 1) {
-            status = 'departed';
-          } else if (i === Math.floor(routeCodes.length / 2) - 1) {
-            status = 'current';
-          } else {
-            status = 'upcoming';
-          }
-          
-          routeStations.push({
-            ...station,
-            arrivalTime,
-            departureTime,
-            distance: Math.round(totalDistance),
-            status
-          });
+        } catch (e) {
+          // Invalid cached data, continue with API fetch
+          console.warn("Invalid cached data:", e);
         }
       }
       
-      // Determine current train location (between the last departed and current station)
-      let currentLocation;
-      const departedStations = routeStations.filter(s => s.status === 'departed');
-      const currentStation = routeStations.find(s => s.status === 'current');
+      // First get train details to get the station list
+      const trainDetailsResponse = await fetch(`https://train-tracker-api.onrender.com/api/train/${trainNum}`);
+      const trainDetailsData = await trainDetailsResponse.json();
       
-      if (departedStations.length > 0 && currentStation) {
-        const lastDepartedStation = departedStations[departedStations.length - 1];
-        
-        // Place train 75% of the way from last departed to current station
-        currentLocation = {
-          lat: lastDepartedStation.lat + (currentStation.lat - lastDepartedStation.lat) * 0.75,
-          lng: lastDepartedStation.lng + (currentStation.lng - lastDepartedStation.lng) * 0.75
-        };
-      } else if (currentStation) {
-        currentLocation = { lat: currentStation.lat, lng: currentStation.lng };
-      } else if (departedStations.length > 0) {
-        currentLocation = { 
-          lat: departedStations[departedStations.length - 1].lat, 
-          lng: departedStations[departedStations.length - 1].lng 
-        };
+      if (!trainDetailsData || !trainDetailsData.success || !trainDetailsData.data) {
+        throw new Error("Failed to fetch train details");
       }
+      
+      // Extract station codes from the train details
+      const stationCodes = parseStationCodesFromTrainDetails(trainDetailsData.data.status);
+      
+      if (!stationCodes || stationCodes.length === 0) {
+        throw new Error("No station information found for this train");
+      }
+      
+      // Fetch coordinates for each station in parallel
+      const fetchPromises = stationCodes.map(code => {
+        // Check cache first
+        if (stationsCache[code]) {
+          return Promise.resolve(stationsCache[code]);
+        }
+        
+        // Fetch from API if not in cache
+        return fetch(`https://train-tracker-api.onrender.com/api/stations/${code}`)
+          .then(response => response.json())
+          .then((stationData: StationApiResponse) => {
+            if (stationData && stationData.success && stationData.data) {
+              const station = {
+                name: stationData.data["Station Name"],
+                code: stationData.data["Station Code"],
+                lat: stationData.data.Latitude,
+                lng: stationData.data.Longitude
+              };
+              // Cache the station data
+              stationsCache[code] = station;
+              return station;
+            }
+            throw new Error(`Invalid data for station ${code}`);
+          })
+          .catch(err => {
+            console.warn(`Failed to fetch data for station ${code}:`, err);
+            // Return null for failed stations
+            return null;
+          });
+      });
+      
+      // Wait for all station data fetches to complete
+      const stationsWithCoordinates = (await Promise.all(fetchPromises)).filter(Boolean) as Station[];
+      
+      if (stationsWithCoordinates.length === 0) {
+        throw new Error("Could not retrieve coordinates for any station");
+      }
+      
+      // Add additional information to stations
+      const enrichedStations = enrichStationsWithTrainInfo(stationsWithCoordinates, trainDetailsData.data.status);
+      
+      // Extract train name
+      const trainName = trainDetailsData.data.status.split('\n')[0] || getTrainName(trainNum);
+      
+      // Determine current location
+      const currentLocation = determineCurrentTrainLocation(enrichedStations);
       
       // Create the route data object
       const routeData = {
         trainName,
         trainNumber: trainNum,
         currentLocation,
-        stations: routeStations
+        stations: enrichedStations
       };
       
+      // Cache the data in localStorage
+      try {
+        localStorage.setItem(storageKey, JSON.stringify({
+          routeData,
+          timestamp: Date.now()
+        }));
+      } catch (e) {
+        console.warn("Failed to cache train data:", e);
+      }
+      
       setTrainRoute(routeData);
-      setIsLoading(false);
+      setFallbackUsed(false);
     } catch (err) {
       console.error("Error generating train route:", err);
+      setErrorMessage(err instanceof Error ? err.message : "Failed to load train route");
       
-      // If there's an error, use a default route
-      const defaultRoute = getDefaultRoute("12951");
-      setTrainRoute(defaultRoute);
+      // Fall back to a simulated route when the API fails
+      const fallbackRoute = getDefaultRoute(trainNum);
+      setTrainRoute(fallbackRoute);
+      setFallbackUsed(true);
+    } finally {
       setIsLoading(false);
     }
   };
   
+  // Parse station codes from train details text
+  const parseStationCodesFromTrainDetails = (statusText: string): string[] => {
+    try {
+      const lines = statusText.split('\n').filter(line => line.trim() && !line.includes('Show Satus') && !line.includes('PNR Status'));
+      
+      // Find the date line to determine where station info ends
+      const dateLineIndex = lines.findIndex(line => 
+        line.includes('-Apr') || line.includes('-May') || line.includes('-Jun') ||
+        line.includes('-Jan') || line.includes('-Feb') || line.includes('-Mar') ||
+        line.includes('-Jul') || line.includes('-Aug') || line.includes('-Sep') ||
+        line.includes('-Oct') || line.includes('-Nov') || line.includes('-Dec')
+      );
+      
+      // Get only station lines
+      const stationLines = lines.slice(0, dateLineIndex !== -1 ? dateLineIndex : undefined);
+      
+      // Extract station codes
+      return stationLines
+        .filter(line => line.includes(' - '))
+        .map(line => {
+          const parts = line.split(' - ');
+          return parts[parts.length - 1].trim();
+        });
+    } catch (error) {
+      console.error('Error parsing station codes:', error);
+      return [];
+    }
+  };
+  
+  // Add train-specific info to stations
+  const enrichStationsWithTrainInfo = (stations: Station[], statusText: string): Station[] => {
+    // Generate arrival/departure times and distances
+    let totalDistance = 0;
+    let currentDayCount = 1;
+    
+    return stations.map((station, index) => {
+      // Calculate simulated times and distances
+      let arrivalTime = "--";
+      let departureTime = "--";
+      let distance = 0;
+      let haltTime = 5; // Default halt time in minutes
+      
+      if (index > 0) {
+        // For non-origin stations, calculate arrival time
+        const hourOffset = Math.floor(index * 1.5) % 24;
+        const minuteOffset = (index * 15) % 60;
+        arrivalTime = `${String(hourOffset).padStart(2, '0')}:${String(minuteOffset).padStart(2, '0')}`;
+        
+        // Calculate distance based on index and actual coordinates
+        if (index > 0) {
+          const prevStation = stations[index - 1];
+          const legDistance = calculateDistance(
+            prevStation.lat, prevStation.lng,
+            station.lat, station.lng
+          );
+          totalDistance += legDistance;
+        }
+        
+        // For non-terminal stations, calculate departure time
+        if (index < stations.length - 1) {
+          const arrHour = parseInt(arrivalTime.split(':')[0]);
+          const arrMinute = parseInt(arrivalTime.split(':')[1]);
+          
+          const depMinute = (arrMinute + haltTime) % 60;
+          const depHour = (arrHour + Math.floor((arrMinute + haltTime) / 60)) % 24;
+          
+          departureTime = `${String(depHour).padStart(2, '0')}:${String(depMinute).padStart(2, '0')}`;
+        }
+        
+        // Change day count after midnight
+        if (arrivalTime !== "--") {
+          const hourAsInt = parseInt(arrivalTime.split(':')[0]);
+          if (hourAsInt === 0 && parseInt(arrivalTime.split(':')[1]) < 30) {
+            currentDayCount++;
+          }
+        }
+      } else {
+        // For origin station, only set departure time
+        departureTime = "08:30";
+      }
+      
+      // Determine status based on position in route
+      let status: 'departed' | 'current' | 'upcoming';
+      if (index < Math.floor(stations.length / 2) - 1) {
+        status = 'departed';
+      } else if (index === Math.floor(stations.length / 2) - 1) {
+        status = 'current';
+      } else {
+        status = 'upcoming';
+      }
+      
+      return {
+        ...station,
+        arrivalTime,
+        departureTime,
+        distance: Math.round(totalDistance),
+        status,
+        dayCount: currentDayCount.toString()
+      };
+    });
+  };
+  
+  // Memoized distance calculation
+  const distanceCache: Record<string, number> = {};
+  
   // Calculate distance between two coordinates (Haversine formula)
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const cacheKey = `${lat1},${lon1}|${lat2},${lon2}`;
+    if (distanceCache[cacheKey]) return distanceCache[cacheKey];
+    
     const R = 6371; // Radius of the earth in km
     const dLat = deg2rad(lat2 - lat1);
     const dLon = deg2rad(lon2 - lon1);
@@ -295,11 +398,38 @@ const SimulatedExcelRailwayMap: React.FC<{trainNumber: string, dateOfJourney: st
       Math.sin(dLon/2) * Math.sin(dLon/2); 
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
     const distance = R * c; // Distance in km
+    
+    distanceCache[cacheKey] = distance;
     return distance;
   };
   
   const deg2rad = (deg: number): number => {
     return deg * (Math.PI/180);
+  };
+  
+  // Determine current train location based on station statuses
+  const determineCurrentTrainLocation = (stations: Station[]): {lat: number, lng: number} | null => {
+    const departedStations = stations.filter(s => s.status === 'departed');
+    const currentStation = stations.find(s => s.status === 'current');
+    
+    if (departedStations.length > 0 && currentStation) {
+      const lastDepartedStation = departedStations[departedStations.length - 1];
+      
+      // Place train 75% of the way from last departed to current station
+      return {
+        lat: lastDepartedStation.lat + (currentStation.lat - lastDepartedStation.lat) * 0.75,
+        lng: lastDepartedStation.lng + (currentStation.lng - lastDepartedStation.lng) * 0.75
+      };
+    } else if (currentStation) {
+      return { lat: currentStation.lat, lng: currentStation.lng };
+    } else if (departedStations.length > 0) {
+      return { 
+        lat: departedStations[departedStations.length - 1].lat, 
+        lng: departedStations[departedStations.length - 1].lng 
+      };
+    }
+    
+    return null;
   };
   
   // Get train name based on train number
@@ -320,7 +450,7 @@ const SimulatedExcelRailwayMap: React.FC<{trainNumber: string, dateOfJourney: st
   // Get a default route if needed
   const getDefaultRoute = (trainNum: string): any => {
     return {
-      trainName: "Mumbai Rajdhani Express",
+      trainName: getTrainName(trainNum),
       trainNumber: trainNum,
       currentLocation: { lat: 23.17, lng: 75.78 }, // Somewhere near Indore
       stations: [
@@ -337,13 +467,19 @@ const SimulatedExcelRailwayMap: React.FC<{trainNumber: string, dateOfJourney: st
 
   // Create and render the map once data is loaded
   useEffect(() => {
-    if (!isMapLoaded || !trainRoute || isLoading) return;
+    if (!isMapLoaded || !trainRoute || isLoading || !window.L) return;
     
-    // Initialize map once data is loaded
+    // Clear any existing map
+    if (mapRef.current) {
+      mapRef.current.remove();
+      mapRef.current = null;
+    }
+    
+    // Initialize map
     const L = window.L;
     const mapContainer = document.getElementById('train-map');
     
-    if (!mapContainer || !L) return;
+    if (!mapContainer) return;
     
     // Create map centered on India
     const map = L.map('train-map').setView([22.5937, 78.9629], 5);
@@ -432,7 +568,9 @@ const SimulatedExcelRailwayMap: React.FC<{trainNumber: string, dateOfJourney: st
     }
     
     // Fit map to show all stations
-    map.fitBounds(stationCoordinates);
+    if (stationCoordinates.length > 0) {
+      map.fitBounds(stationCoordinates);
+    }
     
     // Clean up on unmount
     return () => {
@@ -455,6 +593,16 @@ const SimulatedExcelRailwayMap: React.FC<{trainNumber: string, dateOfJourney: st
           <div className="text-center">
             <div className="w-10 h-10 border-4 border-forest-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-gray-500">Loading map data...</p>
+            <p className="text-xs text-gray-400 mt-2">The first load might take a moment as we fetch station coordinates</p>
+          </div>
+        </div>
+      ) : errorMessage ? (
+        <div className="flex items-center justify-center h-80">
+          <div className="text-center">
+            <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+            <p className="text-gray-700 font-medium mb-2">Error loading data</p>
+            <p className="text-gray-500 text-sm">{errorMessage}</p>
+            <p className="text-gray-400 text-xs mt-4">Showing simulated route instead</p>
           </div>
         </div>
       ) : (
@@ -473,7 +621,7 @@ const SimulatedExcelRailwayMap: React.FC<{trainNumber: string, dateOfJourney: st
               <span className="font-medium">Total Distance:</span> {
                 trainRoute.stations[trainRoute.stations.length - 1].distance
               } km<br />
-              <span className="font-medium">Data Source:</span> Simulated Excel Database
+              <span className="font-medium">Total Stations:</span> {trainRoute.stations.length}
             </p>
           </div>
           
@@ -501,18 +649,27 @@ const SimulatedExcelRailwayMap: React.FC<{trainNumber: string, dateOfJourney: st
         </div>
       )}
       
-      {/* Simulated data info */}
+      {/* API Integration info */}
       {!isLoading && (
         <div className="mt-4 bg-blue-50 p-3 rounded-lg border border-blue-100">
-          <h4 className="font-semibold text-blue-700 mb-2">Simulated Data Integration</h4>
+          <h4 className="font-semibold text-blue-700 mb-2">API Integration</h4>
           <p className="text-sm text-blue-600">
-            This map uses a simulated database of Indian railway stations that represents the data from "./asset/Indian_Railway_Stations.xlsx". 
-            The database includes station coordinates for multiple routes across India. Train routes are generated on demand based on the selected train number.
+            This map uses the Train Tracker API to fetch real station coordinates. For each station in the route, 
+            we query the API to get the exact latitude and longitude for accurate positioning.
+            {fallbackUsed && " Currently showing simulated data due to API unavailability."}
+            {!fallbackUsed && " Station data is cached for faster future loading."}
           </p>
         </div>
       )}
     </div>
   );
 };
+
+// Add type declaration for window.L
+declare global {
+  interface Window {
+    L: any;
+  }
+}
 
 export default TrainTrackerPopup;
