@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Train, Clock, AlertTriangle, ChevronDown, ChevronUp, ArrowRight, Calendar } from 'lucide-react';
-import { useToast } from '../contexts/ToastContext';
 
 interface TrainStationDetails {
   stationCode: string;
@@ -44,7 +43,6 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
       ? formatDateFromPNR(pnrData.dateOfJourney) 
       : new Date().toISOString().split('T')[0]
   );
-  const { showToast } = useToast();
 
   useEffect(() => {
     if (pnrData && pnrData.trainNumber) {
@@ -211,7 +209,6 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
 
   const fetchTrainDetails = async (trainNum: string) => {
     if (!trainNum) {
-      showToast('Please enter a train number', 'error');
       return;
     }
 
@@ -223,7 +220,6 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
       setTrainDetails(cachedDetails);
       simulateCurrentPosition(cachedDetails.schedule);
       setLoading(false);
-      showToast('Loaded cached train details', 'success');
       return;
     }
     
@@ -236,7 +232,6 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
       const data = await response.json();
       
       if (!data || !data.success || !data.data) {
-        showToast('No data found for this train number', 'error');
         setTrainDetails(null);
       } else {
         // Extract train name from the status text
@@ -261,10 +256,8 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
         
         setTrainDetails(trainData);
         simulateCurrentPosition(trainData.schedule);
-        showToast('Train details loaded successfully', 'success');
       }
     } catch (error) {
-      showToast('Failed to fetch train details. Please try again.', 'error');
       console.error('Error fetching train details:', error);
     } finally {
       setLoading(false);
@@ -454,39 +447,6 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
     });
   };
 
-  // Clear all cached trains from localStorage
-  const clearAllCachedTrains = () => {
-    try {
-      const keysToDelete = [];
-      
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('train_')) {
-          keysToDelete.push(key);
-        }
-      }
-      
-      keysToDelete.forEach(key => localStorage.removeItem(key));
-      showToast('Cache cleared successfully', 'success');
-    } catch (error) {
-      console.error('Error clearing cache:', error);
-      showToast('Failed to clear cache', 'error');
-    }
-  };
-
-  // Clear cache for current train
-  const clearCurrentTrainCache = () => {
-    if (trainNumber) {
-      try {
-        localStorage.removeItem(`train_${trainNumber}`);
-        showToast(`Cache cleared for train ${trainNumber}`, 'success');
-      } catch (error) {
-        console.error('Error clearing current train cache:', error);
-        showToast('Failed to clear cache', 'error');
-      }
-    }
-  };
-
   return (
     <div className={`w-full ${standalone ? 'max-w-xl' : ''} bg-white rounded-lg shadow-md overflow-hidden`}>
       <div className="bg-forest-700 p-4 text-white">
@@ -495,26 +455,11 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
             <Train className="w-5 h-5 mr-2" />
             <h2 className="text-lg font-bold">Train Live Tracker</h2>
           </div>
-          <div className="flex space-x-2">
-            {pnrData?.trainNumber && (
-              <span className="bg-forest-600 px-2 py-1 rounded text-xs">
-                PNR Connected
-              </span>
-            )}
-            {trainDetails && (
-              <div className="relative group">
-                <button 
-                  className="text-xs px-2 py-1 bg-forest-800 rounded hover:bg-forest-900"
-                  onClick={clearCurrentTrainCache}
-                >
-                  Clear Cache
-                </button>
-                <div className="absolute hidden group-hover:block right-0 w-40 p-2 mt-1 text-xs bg-forest-900 rounded shadow-lg">
-                  Clear cached data for this train
-                </div>
-              </div>
-            )}
-          </div>
+          {pnrData?.trainNumber && (
+            <span className="bg-forest-600 px-2 py-1 rounded text-xs">
+              PNR Connected
+            </span>
+          )}
         </div>
       </div>
 
