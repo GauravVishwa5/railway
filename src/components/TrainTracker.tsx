@@ -9,6 +9,7 @@ interface TrainStationDetails {
   distance: string;
   dayCount: string;
   haltTime: string;
+  seq: string;
 }
 
 interface TrainDetails {
@@ -18,7 +19,7 @@ interface TrainDetails {
   destination: string;
   schedule: TrainStationDetails[];
   runningOn: string;
-  timestamp: number; // When this was cached
+  timestamp: number;
 }
 
 interface TrainTrackerProps {
@@ -29,7 +30,6 @@ interface TrainTrackerProps {
   standalone?: boolean;
 }
 
-// Cache expiration time (7 days in milliseconds)
 const CACHE_EXPIRATION = 7 * 24 * 60 * 60 * 1000;
 
 const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
@@ -55,7 +55,6 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
     }
   }, [pnrData]);
 
-  // Function to format date from PNR format to YYYY-MM-DD
   function formatDateFromPNR(dateString: string): string {
     try {
       const months: Record<string, string> = {
@@ -63,7 +62,6 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
         'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
       };
       
-      // Example format: "Feb 9, 2025 11:30:05 AM"
       const parts = dateString.split(' ');
       const month = months[parts[0]];
       const day = parts[1].replace(',', '').padStart(2, '0');
@@ -76,7 +74,6 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
     }
   }
 
-  // Function to get cached train details from localStorage
   const getCachedTrainDetails = (trainNum: string): TrainDetails | null => {
     try {
       const cachedData = localStorage.getItem(`train_${trainNum}`);
@@ -84,7 +81,6 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
       
       const parsedData: TrainDetails = JSON.parse(cachedData);
       
-      // Check if the cache has expired (7 days)
       if (Date.now() - parsedData.timestamp > CACHE_EXPIRATION) {
         localStorage.removeItem(`train_${trainNum}`);
         return null;
@@ -97,10 +93,8 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
     }
   };
 
-  // Function to save train details to localStorage
   const saveTrainDetailsToCache = (details: TrainDetails) => {
     try {
-      // Add timestamp to track when it was cached
       const detailsWithTimestamp = {
         ...details,
         timestamp: Date.now()
@@ -109,7 +103,6 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
       localStorage.setItem(`train_${details.trainNumber}`, JSON.stringify(detailsWithTimestamp));
     } catch (error) {
       console.error('Error saving train details to cache:', error);
-      // If localStorage is full, clear some older items
       try {
         clearOldCachedTrains();
       } catch (e) {
@@ -118,7 +111,6 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
     }
   };
 
-  // Function to clear older cached trains if localStorage is full
   const clearOldCachedTrains = () => {
     const keysToDelete = [];
     
@@ -132,79 +124,8 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
       }
     }
     
-    // Sort by timestamp (oldest first) and remove the oldest 5 items
     keysToDelete.sort((a, b) => a.timestamp - b.timestamp);
     keysToDelete.slice(0, 5).forEach(item => localStorage.removeItem(item.key));
-  };
-
-  const parseTrainStations = (statusText: string): TrainStationDetails[] => {
-    try {
-      const lines = statusText.split('\n').filter(line => line.trim() && !line.includes('Show Satus') && !line.includes('PNR Status'));
-      
-      const stations: TrainStationDetails[] = [];
-      let dayCount = 1;
-      let totalDistance = 0;
-      
-      // Find the dates line which typically shows travel dates
-      const dateLineIndex = lines.findIndex(line => line.includes('-Apr') || line.includes('-May') || line.includes('-Jun'));
-      
-      // We'll ignore header lines and date lines
-      const stationLines = lines.slice(0, dateLineIndex !== -1 ? dateLineIndex : undefined);
-      
-      stationLines.forEach((line, index) => {
-        // Each line is typically in format "Station Name - CODE"
-        if (line.includes(' - ')) {
-          const [stationName, stationCode] = line.split(' - ').map(part => part.trim());
-          
-          // Calculate simulated times and distances
-          let arrivalTime = "--";
-          let departureTime = "--";
-          let distance = "0";
-          let haltTime = "5";
-          
-          if (index > 0) {
-            // For non-origin stations, calculate arrival time
-            const hourOffset = Math.floor(index * 1.5) % 24;
-            const minuteOffset = (index * 15) % 60;
-            arrivalTime = `${String(hourOffset).padStart(2, '0')}:${String(minuteOffset).padStart(2, '0')}`;
-            
-            // Calculate distance based on index
-            totalDistance += 50 + Math.floor(Math.random() * 30);
-            distance = totalDistance.toString();
-            
-            // For non-terminal stations, calculate departure time
-            if (index < stationLines.length - 1) {
-              const depHour = (hourOffset + Math.floor(parseInt(haltTime) / 60)) % 24;
-              const depMinute = (minuteOffset + (parseInt(haltTime) % 60)) % 60;
-              departureTime = `${String(depHour).padStart(2, '0')}:${String(depMinute).padStart(2, '0')}`;
-            }
-          } else {
-            // For origin station, only set departure time
-            departureTime = "08:30";
-          }
-          
-          // Change day after midnight
-          if (index > 0 && arrivalTime !== "--" && arrivalTime.split(':')[0] === "00" && parseInt(arrivalTime.split(':')[1]) < 30) {
-            dayCount++;
-          }
-          
-          stations.push({
-            stationCode,
-            stationName,
-            arrivalTime,
-            departureTime,
-            distance,
-            dayCount: dayCount.toString(),
-            haltTime
-          });
-        }
-      });
-      
-      return stations;
-    } catch (error) {
-      console.error('Error parsing train stations:', error);
-      return [];
-    }
   };
 
   const fetchTrainDetails = async (trainNum: string) => {
@@ -214,7 +135,6 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
 
     setLoading(true);
     
-    // First, check if we have cached data
     const cachedDetails = getCachedTrainDetails(trainNum);
     if (cachedDetails) {
       setTrainDetails(cachedDetails);
@@ -224,7 +144,6 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
     }
     
     try {
-      // Using the custom API endpoint
       const response = await fetch(
         `https://train-tracker-api.onrender.com/api/train/${trainNum}`
       );
@@ -234,24 +153,59 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
       if (!data || !data.success || !data.data) {
         setTrainDetails(null);
       } else {
-        // Extract train name from the status text
-        const trainName = data.data.status.split('\n')[0] || 'Unknown Train';
+        const stations = data.data.stations.map((station: any, index: number) => {
+          const nextDay = index > 0 && 
+            parseInt(station.arrivalTime.split(':')[0]) < 
+            parseInt(data.data.stations[index-1].departureTime.split(':')[0]);
+          
+          const day = nextDay ? 
+            (parseInt(data.data.stations[index-1].dayCount || "1") + 1).toString() : 
+            station.dayCount || "1";
+            
+          const haltTime = station.seq === data.data.stations.length.toString() ? 
+            "0" : 
+            calculateHaltTime(station.arrivalTime, station.departureTime);
+            
+          return {
+            stationCode: station.stationCode,
+            stationName: station.stationName,
+            arrivalTime: station.arrivalTime.substring(0, 5),
+            departureTime: station.departureTime.substring(0, 5),
+            distance: station.distance,
+            dayCount: day,
+            haltTime,
+            seq: station.seq
+          };
+        });
         
-        // Parse the schedule from the status text
-        const schedule = parseTrainStations(data.data.status);
+        // Calculate day counts correctly
+        let currentDay = 1;
+        for (let i = 0; i < stations.length; i++) {
+          if (i === 0) {
+            stations[i].dayCount = "1";
+            continue;
+          }
+          
+          const prevTime = parseInt(stations[i-1].departureTime.split(':')[0]);
+          const currTime = parseInt(stations[i].arrivalTime.split(':')[0]);
+          
+          if (currTime < prevTime && !(prevTime === 23 && currTime === 0)) {
+            currentDay++;
+          }
+          
+          stations[i].dayCount = currentDay.toString();
+        }
         
-        // Create train details object
         const trainData = {
           trainNumber: trainNum,
-          trainName,
-          origin: schedule.length > 0 ? schedule[0].stationName : 'Unknown',
-          destination: schedule.length > 0 ? schedule[schedule.length - 1].stationName : 'Unknown',
-          runningOn: 'YNYNYNN', // Sample running days (Sun-Sat)
-          schedule,
+          trainName: data.data.trainName,
+          origin: data.data.sourceStationName,
+          destination: data.data.destinationStationName,
+          runningOn: "YNYNYNN", // Sample running days
+          schedule: stations,
           timestamp: Date.now()
         };
         
-        // Save to localStorage for future use
         saveTrainDetailsToCache(trainData);
         
         setTrainDetails(trainData);
@@ -264,67 +218,67 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
     }
   };
 
+  const calculateHaltTime = (arrival: string, departure: string): string => {
+    const arrParts = arrival.split(':').map(Number);
+    const depParts = departure.split(':').map(Number);
+    
+    let diffMinutes = (depParts[0] * 60 + depParts[1]) - (arrParts[0] * 60 + arrParts[1]);
+    
+    if (diffMinutes < 0) {
+      diffMinutes += 24 * 60; // Add a day if negative
+    }
+    
+    return diffMinutes.toString();
+  };
+
   const simulateCurrentPosition = (schedule: TrainStationDetails[]) => {
-    // Get current time
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
     
-    // Get date from journey date
     const selectedDate = new Date(journeyDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     selectedDate.setHours(0, 0, 0, 0);
     
-    // Calculate day difference
     const dayDiff = Math.floor((selectedDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     
-    // If the journey date is in the future, train hasn't started
     if (dayDiff > 0) {
       setCurrentPosition(-1);
       return;
     }
     
-    // If the journey date is in the past, train has completed journey
     if (dayDiff < -1) {
       setCurrentPosition(schedule.length);
       return;
     }
     
-    // For today or yesterday, calculate position based on time
     let position = -1;
     
     for (let i = 0; i < schedule.length; i++) {
       const station = schedule[i];
       
-      // Check if the station is for the correct day
-      const stationDay = parseInt(station.dayCount) - 1; // Convert to 0-based
+      const stationDay = parseInt(station.dayCount) - 1;
       
       if (stationDay > dayDiff) {
-        // This station is for a future day, so train hasn't reached it yet
         continue;
       }
       
       if (stationDay < dayDiff) {
-        // This station is for a past day, so train has already passed it
         position = i;
         continue;
       }
       
-      // Station is for the current day, check time
       if (station.departureTime !== "--") {
         const [depHour, depMinute] = station.departureTime.split(':').map(Number);
         
         if (depHour < currentHour || (depHour === currentHour && depMinute < currentMinute)) {
-          // Train has departed this station
           position = i;
         } else {
-          // Train hasn't departed this station yet
           if (station.arrivalTime !== "--") {
             const [arrHour, arrMinute] = station.arrivalTime.split(':').map(Number);
             
             if (arrHour < currentHour || (arrHour === currentHour && arrMinute < currentMinute)) {
-              // Train has arrived but not departed
               position = i - 0.5;
               break;
             }
@@ -332,11 +286,9 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
           break;
         }
       } else if (station.arrivalTime !== "--") {
-        // Last station, only arrival time
         const [arrHour, arrMinute] = station.arrivalTime.split(':').map(Number);
         
         if (arrHour < currentHour || (arrHour === currentHour && arrMinute < currentMinute)) {
-          // Train has arrived at the last station
           position = i;
         }
         break;
@@ -395,7 +347,6 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
     );
   };
 
-  // Get displayed stations (all if expanded, or limited number if not)
   const getDisplayedStations = () => {
     if (!trainDetails?.schedule) return [];
     
@@ -404,13 +355,10 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
     const schedule = trainDetails.schedule;
     const result = [];
     
-    // Always show first station
     if (schedule.length > 0) result.push(schedule[0]);
     
-    // Show current and next station
     if (currentPosition >= 0 && currentPosition < schedule.length) {
       if (currentPosition % 1 !== 0) {
-        // If at station, show current and next
         const currentIdx = Math.floor(currentPosition);
         if (currentIdx >= 0 && !result.includes(schedule[currentIdx])) {
           result.push(schedule[currentIdx]);
@@ -419,7 +367,6 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
           result.push(schedule[currentIdx + 1]);
         }
       } else {
-        // If between stations, show next
         const nextIdx = currentPosition + 1;
         if (nextIdx < schedule.length && !result.includes(schedule[nextIdx])) {
           result.push(schedule[nextIdx]);
@@ -427,14 +374,12 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
       }
     }
     
-    // Always show last station
     if (schedule.length > 1 && !result.includes(schedule[schedule.length - 1])) {
       result.push(schedule[schedule.length - 1]);
     }
     
-    // Add a few major stations in between
     const majorStations = schedule.filter(station => 
-      parseInt(station.distance) % 200 < 20 && // Roughly every 200km
+      parseInt(station.distance) % 200 < 20 && 
       !result.includes(station) &&
       station !== schedule[0] && 
       station !== schedule[schedule.length - 1]
@@ -537,7 +482,6 @@ const TrainTracker = ({ pnrData, standalone = false }: TrainTrackerProps) => {
             </div>
 
             <div className="relative">
-              {/* The vertical line */}
               <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-gray-200"></div>
 
               {getDisplayedStations().map((station, idx) => {
